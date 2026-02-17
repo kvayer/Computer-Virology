@@ -1,108 +1,120 @@
-.model tiny ; Крошечная модель памяти – COM программа
-.code ; Определение единственного сегмента – кода
-org 100h ; Смещение регистра IP от начала сегмента кода
+.model tiny 
+.code 
+org 100h 
 
-start: ; Точка входа в программу
-mov ah,40h ; В AH помещаем значение 40h
-mov bx,1; В BX помещаем значение 1
-mov cx, text1len ; В CX заносим длину строки text1
-lea dx, text1 ; В DX помещаем адрес строки text1
-int 21h ; Прерывание 21h, запись AH=40h на экран BX=1
+start: 
+    ; Вывод запроса имени файла
+    mov ah,40h 
+    mov bx,1
+    mov cx, textFilenameLen
+    lea dx, textFilename
+    int 21h
 
-mov ah,3Fh ; В AH помещаем значение 3Fh
-xor bx,bx ; Обнуляем регистр BX
-mov cx,15 ; В CX заносим длину строки – 15
-lea dx, filename ; В DX помещаем адрес строки filename
-int 21h ;21h, чтение AH=40h с клавиатуры BX=0
+    ; Ввод имени файла
+    mov ah,3Fh
+    xor bx,bx
+    mov cx,15
+    lea dx, filename
+    int 21h
 
-mov si,ax ; В SI копируем значение регистра AX
-sub si,2 ; Вычитаем из SI 2
-mov filename[si],0 ; В SI-й байт в строке filename пишем 0
+    mov si,ax ; в ax теперь лежит длина введенного имени файла
+    sub si,2 ; но нужно убрать символы перевода строки
+    mov filename[si],0 ; ставим 0 в конец строки обозначающий конец строки
 
-mov ah, 40h
-mov bx, 1
-mov cx, text2len
-mov dx, offset text2
-int 21h
+    ; Вывод запроса ключа
+    mov ah, 40h
+    mov bx, 1
+    mov cx, textKeyLen
+    mov dx, offset textKey
+    int 21h
 
-mov ah, 3Fh
-xor bx, bx
-mov cx, 8
-mov dx, offset password
-int 21h
+    mov ah, 3Fh
+    xor bx, bx
+    mov cx, 8
+    mov dx, offset password
+    int 21h
 
-mov cx, ax ;В CX копируем значение регистра AX
-dec cx ;Уменьшаем содержимое CX на 1
-dec cx ;Уменьшаем содержимое CX на 1
-lea si, password ;В SI помещаем адрес строки password
-xor al, al ;Обнуляем AL
+    mov cx, ax
+    dec cx
+    dec cx
+    lea si, password
+    xor al, al
+    next:
+    add al, [si]
+    inc si
+    loop next
+    mov key, al
 
-next: ;Метка next
-add al, [si] ;Прибавляем к AL, содержимое ячейки по адресу SI
-inc si ;Увеличиваем SI на 1
-loop next ;Выполняем цикл с метки next CX раз
-mov key, al ;Копируем в переменную key значение AL
+    ; Поиск файла
+    mov ah,4Eh 
+    lea dx, filename 
+    int 21h
+    jnc file_ok ; если файл найден, переходим на метку file_ok
 
-mov ah,4Eh ;В AH помещаем значение 4Eh
-lea dx, filename ;В регистр DX помещаем адрес filename
-int 21h ;21h, поиск первого файла AH=4Eh
-jnc file_ok ;В случа успеха переходим на метку
+    ; Если файл не найден выводим сообщение об ошибке
+    mov ah,9 
+    lea dx,textErr 
+    int 21h 
+    ret
 
-mov ah,9 ;В AH помещаем значение 09h
-lea dx,text3 ;В регистр DX помещаем адрес text3
-int 21h ;Прерывание 21h, вывод на экран строки AH=9
-ret ;Возврат из программы – ее завершение
+file_ok: 
+    ; Открытие файла для чтения и записи
+    mov ax,3D02h 
+    lea dx,filename 
+    int 21h 
 
-file_ok: ;Метка file_ok
-mov ax,3D02h ;В AX помещаем значение 3D02h
-lea dx,filename ;В регистр DX помещаем адрес filename
-int 21h ;21h, открытие файла AH=3Dh для чтение и записи AL=02h
+    xchg bx,ax ;Помещаем в BX дескриптор файла
 
-xchg bx,ax ;Помещаем в BX дескриптор файла из AX
-mov ah,3Fh ;В AH помещаем значение 3Fh
-mov cx,ds:[9Ah] ;В CX помещаем размер файла
-lea dx,buffer ;В DX помещаем адрес buffer
-int 21h ;21h, чтение из файла AH=3Fh
+    ; Чтение файла в буфер
+    mov ah,3Fh 
+    mov cx,ds:[9Ah] ; размер файла из DTA
+    lea dx,buffer 
+    int 21h
 
-mov cx,ds:[9Ah] ;В CX помещаем размер файла
-mov si,offset buffer ;В SI помещаем адрес buffer
-mov al,key ;В AL помещаем значение переменной key
-call crypt ;Вызываем процедуру crypt
+    ; Шифрование данных
+    mov cx,ds:[9Ah] ;В CX помещаем размер файла
+    mov si,offset buffer
+    mov al,key 
+    call crypt ;Вызываем процедуру crypt
 
-mov ah,42h ;В AH помещаем значение 42h
-mov al,0 ;В AL помещаем значение 00
-xor cx,cx ;Обнуляем регистр CX
-xor dx,dx ;Обнуляем регистр DX
-int 21h ;21h, перемещаем указатель AH=42h от начала AL=0
+    ; Перемещение указателя в начало файла
+    mov ah,42h 
+    mov al,0 
+    xor cx,cx 
+    xor dx,dx 
+    int 21h 
 
-mov ah,40h ;В AH помещаем значение 40h
-mov cx,ds:[9Ah] ;В CX помещаем размер файла
-lea dx,buffer ;В DX помещаем адрес буфера buffer
-int 21h ;21h, запись в файл AH=40h
+    ; Запись измененных данных обратно
+    mov ah,40h
+    mov cx,ds:[9Ah] 
+    lea dx,buffer 
+    int 21h 
 
-mov ah,3Eh ;В AH помещаем значение 3Eh
-int 21h ;21h, закрытие файла AH=3Eh
-ret ;Возврат из программы – ее завершение
+    ; Закрытие файла
+    mov ah,3Eh 
+    int 21h 
+    ret 
 
-crypt proc ;Начало процедуры crypt
-next1: ;Метка next1
-xor [si],al ;Сложение по модулю 2 ячейки по адресу SI и значения регистра AL
-inc si ;Увеличиваем SI на 1
-loop next1 ;Выполняем цикл с метки next1 CX раз
-ret ;Возврат из процедуры
-crypt endp ;Конец процедуры
+; Процедура шифрования: умножение на ключ (mod 256)
+; Расшифровка — умножение на обратный к ключу (в decrpt)
+crypt proc
+nextIterByte:
+    add [si], al            ; Шифрование сложением (отличие от lab11)
+    inc si
+    loop nextIterByte
+    ret
+crypt endp 
 
+    ; Данные
+    textFilename db 0Dh,0Ah,'filename:' 
+    textFilenameLen = $-textFilename 
+    textKey db 0Dh,0Ah, 'key:' 
+    textKeyLen = $-textKey 
+    textErr db 'file not found',0Dh,0Ah,'$'
 
-; Данные
-text1 db 0Dh,0Ah,'file name:' ;Запрос имени файла
-text1len = $-text1 ;Длина строки text1
-text2 db 0Dh,0Ah, 'key:' ;Запрос пароля
-text2len = $-text2 ;Длина строки text2
-text3 db 'file not found',0Dh,0Ah,'$' ;Сообщение об ошибке
-
-filename db 15 dup(0) ;Буфер для вводимого имени файла
-password db 8 dup(0) ;Буфер для вводимого пароля
-key db 0 ;Переменная для ключа шифрования
+    filename db 15 dup(0) 
+    password db 8 dup(0) ;Буфер для вводимого пароля
+    key db 0 
 buffer: ;Буфер для содержимого файла
 
-end start ;Конец программы
+end start

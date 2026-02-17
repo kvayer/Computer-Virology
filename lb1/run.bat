@@ -1,3 +1,3 @@
-tasm lab1.asm
-tlink lab1.obj
-lab1
+tasm lab.asm
+tlink lab.obj
+lab

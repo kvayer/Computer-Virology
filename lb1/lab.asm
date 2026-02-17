@@ -1,4 +1,4 @@
-model small ; собирается как exe
+.model small ; собирается как exe
 .stack 100h
 .data
 
